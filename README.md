@@ -51,15 +51,14 @@ Copy the example environment file and add your Zerodha credentials:
 cp .env.example .env
 ```
 
-Edit `.env` and add your credentials:
+Edit `.env` and add your **API Key and Secret** (these are the only required credentials):
 
 ```env
 ZERODHA_API_KEY=your_api_key_here
 ZERODHA_API_SECRET=your_api_secret_here
-ZERODHA_USER_ID=your_user_id_here
-ZERODHA_PASSWORD=your_password_here
-ZERODHA_PIN=your_pin_here
 ```
+
+**Note**: You do NOT need to store your user ID, password, or PIN in the `.env` file. The system uses a manual OAuth login flow (see below).
 
 ### 4. Update Configuration
 
@@ -83,16 +82,48 @@ TRADING_PARAMS = {
 
 1. Go to [https://developers.kite.trade/](https://developers.kite.trade/)
 2. Login with your Zerodha credentials
-3. Create a new app
-4. Note down your API Key and API Secret
+3. Click "Create New App"
+4. Fill in the app details:
+   - App Name: BankNifty Trader (or any name)
+   - Redirect URL: `http://127.0.0.1`
+   - Description: Options trading system
+5. Note down your **API Key** and **API Secret**
 
-### 2. Set Redirect URL
+### 2. Manual Login Flow (First Time)
 
-Set the redirect URL to: `http://localhost:8080`
+When you run the system for the first time, you'll need to manually login:
 
-### 3. Get Access Token
+1. **System generates login URL**: The system will display a URL like:
+   ```
+   https://kite.zerodha.com/connect/login?api_key=xxxxx
+   ```
 
-The system will automatically handle the login flow the first time you run it. Follow the prompts to authorize the application.
+2. **Login manually**:
+   - Copy and paste the URL into your browser
+   - Login with your Zerodha User ID and Password
+   - Enter your 2FA/TOTP code if enabled
+
+3. **Get request token**: After successful login, you'll be redirected to:
+   ```
+   http://127.0.0.1/?request_token=XXXXXXXXX&action=login&status=success
+   ```
+   Copy the `request_token` value from the URL
+
+4. **Paste request token**: Paste the request token into the terminal
+
+5. **Save access token**: The system will generate an access token and display it. Save this in your `.env` file:
+   ```env
+   ZERODHA_ACCESS_TOKEN=your_access_token_here
+   ```
+
+### 3. Reusing Access Tokens
+
+Access tokens are valid until midnight. To avoid manual login every time:
+
+1. After first login, copy the access token displayed by the system
+2. Add it to your `.env` file: `ZERODHA_ACCESS_TOKEN=...`
+3. The system will automatically use this token on subsequent runs
+4. Generate a new token daily (tokens expire at midnight IST)
 
 ## Usage
 
@@ -287,11 +318,24 @@ pip install kiteconnect
 
 ### Issue: "API credentials not configured"
 
-Edit `config.py` or `.env` file with your Zerodha credentials.
+Make sure you have set `ZERODHA_API_KEY` and `ZERODHA_API_SECRET` in your `.env` file.
 
-### Issue: "Access token expired"
+### Issue: "Access token expired" or "TokenException"
 
-Delete the old access token and re-authenticate.
+Access tokens expire daily at midnight IST. To fix:
+
+1. Remove the old `ZERODHA_ACCESS_TOKEN` from your `.env` file
+2. Run the system again
+3. Follow the manual login flow to get a new token
+4. Save the new token in your `.env` file
+
+### Issue: "Invalid request token"
+
+Request tokens are valid for only a few minutes. If you see this error:
+
+1. Generate a fresh login URL by restarting the system
+2. Complete the login process quickly
+3. Paste the request token immediately
 
 ### Issue: "Database locked"
 
