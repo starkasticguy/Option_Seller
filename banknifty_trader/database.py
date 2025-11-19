@@ -27,8 +27,19 @@ class TradingDatabase:
         self.ist = pytz.timezone('Asia/Kolkata')
         self.conn = None
         self.cursor = None
+        self._ensure_db_directory()
         self._connect()
         self._create_tables()
+
+    def _ensure_db_directory(self):
+        """Ensure database directory exists"""
+        import os
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+            except Exception as e:
+                print(f"{Fore.RED}Error creating database directory: {str(e)}")
 
     def _connect(self):
         """Establish database connection"""
@@ -40,6 +51,10 @@ class TradingDatabase:
 
     def _create_tables(self):
         """Create database tables if they don't exist"""
+        if not self.conn or not self.cursor:
+            print(f"{Fore.YELLOW}Database not connected - skipping table creation")
+            return
+
         try:
             # Trades table
             self.cursor.execute('''
