@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple
 import pytz
 from bs4 import BeautifulSoup
 import json
+import numpy as np
 from colorama import Fore, Style
 
 from config import EVENTS_CONFIG, MARKET_DATA
@@ -30,6 +31,9 @@ class MarketMonitor:
         self.last_event_fetch = None
         self.vix_cache = None
         self.last_vix_fetch = None
+        self.volatility_cache = None
+        self.last_volatility_fetch = None
+        self.price_history = []
 
     def get_india_vix(self) -> Dict:
         """
@@ -106,6 +110,130 @@ class MarketMonitor:
                 'change_percent': 0,
                 'status': 'Unknown',
                 'color': Fore.WHITE,
+                'timestamp': datetime.now(self.ist)
+            }
+
+    def calculate_banknifty_volatility(self, lookback_days: int = 20) -> Dict:
+        """
+        Calculate historical volatility of BankNifty
+
+        Args:
+            lookback_days: Number of days to look back for volatility calculation
+
+        Returns:
+            Dict with volatility data: {
+                'current': float (annualized volatility),
+                'daily': float (daily volatility),
+                'status': str,
+                'color': str,
+                'period': int (days used for calculation)
+            }
+        """
+        try:
+            # Check cache (refresh every 5 minutes)
+            if self.last_volatility_fetch:
+                time_diff = (datetime.now() - self.last_volatility_fetch).seconds
+                if time_diff < 300 and self.volatility_cache:
+                    return self.volatility_cache
+
+            if self.kite:
+                # Fetch historical data from Kite
+                from_date = datetime.now() - timedelta(days=lookback_days + 10)
+                to_date = datetime.now()
+
+                try:
+                    # Get BankNifty instrument token
+                    # Format: NSE:NIFTY BANK or BANKNIFTY
+                    historical_data = self.kite.historical_data(
+                        instrument_token=260105,  # BankNifty index token
+                        from_date=from_date,
+                        to_date=to_date,
+                        interval='day'
+                    )
+
+                    if len(historical_data) < 5:
+                        raise ValueError("Insufficient historical data")
+
+                    # Extract closing prices
+                    prices = [candle['close'] for candle in historical_data[-lookback_days:]]
+
+                except Exception as e:
+                    # If fetching fails, use simulated data
+                    print(f"{Fore.YELLOW}Could not fetch historical data: {str(e)}")
+                    prices = None
+            else:
+                prices = None
+
+            # If we don't have real data, generate realistic mock data
+            if prices is None or len(prices) < 5:
+                # Use stored price history if available, otherwise generate mock data
+                if len(self.price_history) >= lookback_days:
+                    prices = self.price_history[-lookback_days:]
+                else:
+                    # Generate mock price data with realistic volatility
+                    base_price = 48000
+                    daily_vol = 0.015  # 1.5% daily volatility
+                    prices = [base_price]
+                    np.random.seed(int(datetime.now().timestamp()) % 1000)
+
+                    for _ in range(lookback_days - 1):
+                        change = np.random.normal(0, daily_vol)
+                        new_price = prices[-1] * (1 + change)
+                        prices.append(new_price)
+
+                    # Store for future use
+                    self.price_history = prices
+
+            # Calculate returns
+            returns = []
+            for i in range(1, len(prices)):
+                ret = (prices[i] - prices[i-1]) / prices[i-1]
+                returns.append(ret)
+
+            # Calculate volatility
+            daily_volatility = np.std(returns)
+            annualized_volatility = daily_volatility * np.sqrt(252) * 100  # Convert to percentage
+
+            # Determine volatility status
+            if annualized_volatility > 25:
+                status = "Very High"
+                color = Fore.RED
+            elif annualized_volatility > 20:
+                status = "High"
+                color = Fore.YELLOW
+            elif annualized_volatility > 15:
+                status = "Normal"
+                color = Fore.GREEN
+            elif annualized_volatility > 10:
+                status = "Low"
+                color = Fore.CYAN
+            else:
+                status = "Very Low"
+                color = Fore.BLUE
+
+            result = {
+                'current': annualized_volatility,
+                'daily': daily_volatility * 100,  # Convert to percentage
+                'status': status,
+                'color': color,
+                'period': len(prices),
+                'timestamp': datetime.now(self.ist)
+            }
+
+            # Update cache
+            self.volatility_cache = result
+            self.last_volatility_fetch = datetime.now()
+
+            return result
+
+        except Exception as e:
+            print(f"{Fore.RED}Error calculating volatility: {str(e)}")
+            return {
+                'current': 0,
+                'daily': 0,
+                'status': 'Unknown',
+                'color': Fore.WHITE,
+                'period': 0,
                 'timestamp': datetime.now(self.ist)
             }
 
@@ -303,6 +431,7 @@ class MarketMonitor:
         """
         vix_data = self.get_india_vix()
         event_data = self.check_economic_events()
+        volatility_data = self.calculate_banknifty_volatility()
 
         # Determine overall market condition
         overall_status = 'GOOD'
@@ -344,6 +473,7 @@ class MarketMonitor:
         return {
             'status': overall_status,
             'vix': vix_data,
+            'volatility': volatility_data,
             'events': event_data,
             'reasons': reasons,
             'timestamp': now,

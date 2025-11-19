@@ -152,6 +152,7 @@ class TradingSystem:
         """Display current market conditions"""
         market_status = self.market_monitor.get_market_status()
         vix_data = market_status['vix']
+        volatility_data = market_status['volatility']
         event_data = market_status['events']
 
         print(f"\n{Fore.YELLOW}📊 MARKET STATUS:")
@@ -160,10 +161,16 @@ class TradingSystem:
         spot = self.trader.get_banknifty_spot()
         print(f"{Fore.WHITE}BankNifty: {Fore.CYAN}{spot:,.2f}")
 
-        # VIX
+        # VIX (Implied Volatility)
         vix_color = vix_data['color']
         vix_symbol = self._get_vix_symbol(vix_data['current'])
-        print(f"{Fore.WHITE}VIX: {vix_color}{vix_data['current']:.2f} ({vix_data['status']}) {vix_symbol}")
+        print(f"{Fore.WHITE}India VIX (IV): {vix_color}{vix_data['current']:.2f} ({vix_data['status']}) {vix_symbol}")
+
+        # BankNifty Historical Volatility
+        vol_color = volatility_data['color']
+        vol_symbol = self._get_vix_symbol(volatility_data['current'])
+        print(f"{Fore.WHITE}BankNifty HV: {vol_color}{volatility_data['current']:.2f}% ({volatility_data['status']}) {vol_symbol}")
+        print(f"{Fore.WHITE}  Daily Vol: {volatility_data['daily']:.2f}% | Period: {volatility_data['period']} days")
 
         # Event Risk
         event_symbol = self._get_event_symbol(event_data['status'])
