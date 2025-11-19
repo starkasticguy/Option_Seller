@@ -12,6 +12,10 @@ from colorama import Fore, Style, init
 import threading
 import os
 
+# Set TERM environment variable if not set (fixes terminal warnings)
+if 'TERM' not in os.environ:
+    os.environ['TERM'] = 'xterm-256color'
+
 # Import Zerodha KiteConnect
 try:
     from kiteconnect import KiteConnect
