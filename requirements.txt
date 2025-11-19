@@ -31,3 +31,16 @@ loguru>=0.6.0
 
 # Environment variables
 python-dotenv>=1.0.0
+
+# Backtesting Framework Dependencies
+# Parquet file support for fast data loading
+pyarrow>=10.0.0
+
+# Interactive charts and visualization
+plotly>=5.13.0
+
+# Statistical analysis
+statsmodels>=0.13.0
+
+# Progress bars
+tqdm>=4.64.0
