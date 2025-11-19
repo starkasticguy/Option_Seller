@@ -1,0 +1,35 @@
+# Zerodha API
+kiteconnect>=4.0.0
+
+# Data Analysis
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Web Requests
+requests>=2.28.0
+
+# Terminal Display
+colorama>=0.4.6
+
+# Scheduling
+schedule>=1.1.0
+
+# Timezone Handling
+pytz>=2023.3
+
+# Additional utilities
+python-dateutil>=2.8.0
+beautifulsoup4>=4.11.0
+lxml>=4.9.0
+
+# Web scraping for event data
+selenium>=4.8.0
+
+# Async support
+aiohttp>=3.8.0
+
+# Logging
+loguru>=0.6.0
+
+# Environment variables
+python-dotenv>=1.0.0

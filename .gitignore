@@ -205,3 +205,27 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Trading System Specific
+# Database files (contains trade history)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+banknifty_trader/logs/
+
+# API credentials and sensitive config
+.env
+config_local.py
+credentials.json
+
+# Backup files
+backups/
+*.bak
+
+# Test data
+test_data/
+mock_data/
