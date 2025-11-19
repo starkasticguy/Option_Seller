@@ -104,20 +104,49 @@ class TradingSystem:
             access_token = ZERODHA_CONFIG.get('access_token')
 
             if not access_token:
-                # Need to login
-                print(f"{Fore.YELLOW}Login required...")
-                print(f"{Fore.CYAN}Please visit: {kite.login_url()}")
-                print(f"{Fore.YELLOW}After login, paste the request token here:")
+                # Need to login - Manual OAuth flow
+                print(f"\n{Fore.CYAN}{'='*60}")
+                print(f"{Fore.YELLOW}ZERODHA LOGIN REQUIRED - MANUAL AUTHENTICATION")
+                print(f"{Fore.CYAN}{'='*60}\n")
+
+                print(f"{Fore.WHITE}Step 1: Copy this URL and open it in your browser:")
+                print(f"{Fore.CYAN}{kite.login_url()}\n")
+
+                print(f"{Fore.WHITE}Step 2: Log in with your Zerodha credentials")
+                print(f"{Fore.WHITE}        - Enter User ID and Password")
+                print(f"{Fore.WHITE}        - Enter 2FA/TOTP if enabled\n")
+
+                print(f"{Fore.WHITE}Step 3: After successful login, you'll be redirected to:")
+                print(f"{Fore.WHITE}        127.0.0.1/?request_token=XXXXXXXXX&action=login&status=success\n")
+
+                print(f"{Fore.WHITE}Step 4: Copy the 'request_token' value from the URL")
+                print(f"{Fore.WHITE}        (everything after 'request_token=' and before '&')\n")
+
+                print(f"{Fore.YELLOW}Paste the request token here and press Enter:")
+                print(f"{Fore.CYAN}>>> {Fore.WHITE}", end='')
 
                 request_token = input().strip()
+
+                if not request_token:
+                    print(f"{Fore.RED}No token provided. Exiting...")
+                    return None
+
+                print(f"\n{Fore.YELLOW}Generating session with request token...")
+
                 data = kite.generate_session(
                     request_token,
                     api_secret=ZERODHA_CONFIG['api_secret']
                 )
                 access_token = data['access_token']
 
-                print(f"{Fore.GREEN}Login successful!")
-                print(f"{Fore.YELLOW}Save this access token to config: {access_token}")
+                print(f"{Fore.GREEN}✓ Login successful!")
+                print(f"\n{Fore.YELLOW}{'='*60}")
+                print(f"{Fore.YELLOW}IMPORTANT: Save this access token for future use")
+                print(f"{Fore.YELLOW}{'='*60}")
+                print(f"{Fore.WHITE}Access Token: {Fore.CYAN}{access_token}")
+                print(f"\n{Fore.WHITE}Add this to your .env file:")
+                print(f"{Fore.CYAN}ZERODHA_ACCESS_TOKEN={access_token}")
+                print(f"{Fore.YELLOW}{'='*60}\n")
 
             kite.set_access_token(access_token)
 

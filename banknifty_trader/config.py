@@ -12,14 +12,21 @@ load_dotenv()
 # ========================
 # ZERODHA API CREDENTIALS
 # ========================
+# For manual login flow:
+# 1. Set ZERODHA_API_KEY and ZERODHA_API_SECRET in .env
+# 2. Run the system, it will generate a login URL
+# 3. Login manually and copy the request token
+# 4. System will generate an access token
+# 5. Save ZERODHA_ACCESS_TOKEN in .env for future use
+# Note: Access tokens are valid until midnight
 ZERODHA_CONFIG = {
     'api_key': os.getenv('ZERODHA_API_KEY', 'YOUR_API_KEY'),
     'api_secret': os.getenv('ZERODHA_API_SECRET', 'YOUR_API_SECRET'),
-    'user_id': os.getenv('ZERODHA_USER_ID', 'YOUR_USER_ID'),
-    'password': os.getenv('ZERODHA_PASSWORD', 'YOUR_PASSWORD'),
-    'pin': os.getenv('ZERODHA_PIN', 'YOUR_PIN'),
-    'request_token': None,  # Will be generated during login
-    'access_token': None    # Will be stored after successful login
+    'user_id': os.getenv('ZERODHA_USER_ID', 'YOUR_USER_ID'),  # Not needed for API login
+    'password': os.getenv('ZERODHA_PASSWORD', 'YOUR_PASSWORD'),  # Not needed for API login
+    'pin': os.getenv('ZERODHA_PIN', 'YOUR_PIN'),  # Not needed for API login
+    'request_token': None,  # Provided manually during login
+    'access_token': os.getenv('ZERODHA_ACCESS_TOKEN')  # Auto-loaded from .env if available
 }
 
 # ========================
