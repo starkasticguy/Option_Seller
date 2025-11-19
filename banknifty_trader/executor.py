@@ -54,12 +54,15 @@ class TradingSystem:
         # Initialize components
         print(f"{Fore.CYAN}Initializing BankNifty Options Trading System...")
 
-        # Zerodha connection
-        self.kite = None
-        if not paper_trading:
-            self.kite = self.initialize_zerodha()
-        else:
+        # Display trading mode
+        if paper_trading:
             print(f"{Fore.YELLOW}Running in PAPER TRADING mode (no real orders)")
+        else:
+            print(f"{Fore.RED}Running in LIVE TRADING mode (real orders will be placed)")
+
+        # Zerodha connection - Initialize even in paper trading to allow authentication testing
+        # Orders will only be blocked in paper trading mode, but you can still login and get market data
+        self.kite = self.initialize_zerodha()
 
         # Initialize modules
         self.market_monitor = MarketMonitor(self.kite)
