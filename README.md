@@ -1,31 +1,32 @@
-# BankNifty Options Trading System
+# BankNifty Options Data Collection System
 
-A comprehensive real-time options trading system for BankNifty weekly options using Zerodha's KiteConnect API. The system implements delta-neutral strangles with dynamic hedging, risk management, and economic event monitoring.
+A real-time market data collection and analysis system for BankNifty weekly options using Zerodha's KiteConnect API. This system collects option chain data, Greeks, volatility metrics, and other market data for analysis.
+
+**Note:** This system is focused on **data collection and analysis only**. Trading/execution functionality will be added in the future.
 
 ## Features
 
-- **Real-time Options Trading**: Live option chain data and automated signal generation
-- **Delta-Neutral Strategy**: Short/long strangles with automatic delta hedging
-- **Risk Management**: Comprehensive position sizing, VaR, stop-loss, and profit targets
-- **Economic Event Monitoring**: Tracks high-impact events and adjusts trading accordingly
-- **VIX-Based Trading**: Only trades within optimal VIX ranges
+- **Real-time Market Data Collection**: Live BankNifty spot price and India VIX
+- **Option Chain Data**: Complete option chain snapshots with bid/ask/LTP
+- **Volatility Metrics**: Historical volatility (HV), implied volatility (IV), IV percentile
+- **Greeks Tracking**: Delta, Gamma, Theta, Vega for all strikes
+- **Open Interest & Volume**: Track OI and volume changes
+- **Put-Call Ratio (PCR)**: OI and volume-based PCR
+- **SQLite Database**: All data stored locally for analysis
 - **Real-time Console Display**: Beautiful colored console output with live updates
-- **Trade Logging**: SQLite database for complete trade history and analytics
-- **Paper Trading Mode**: Test strategies without risking real capital
-- **Performance Analytics**: Win rate, profit factor, Sharpe ratio, and more
+- **Mock Data Mode**: Test without Zerodha API connection
 
 ## Project Structure
 
 ```
 banknifty_trader/
 ├── config.py              # Configuration and parameters
-├── executor.py            # Main trading loop and display
-├── strategy.py            # Core trading strategy logic
-├── market_monitor.py      # Event detection and VIX monitoring
-├── risk_manager.py        # Risk management and position sizing
-├── database.py            # Trade logging and history
+├── data_collector.py      # Main data collection loop and display
+├── data_analyzer.py       # Option chain and volatility analysis
+├── market_monitor.py      # VIX and volatility monitoring
+├── database.py            # Market data logging
 ├── utils.py               # Utility functions
-└── trades.db             # SQLite database (created automatically)
+└── market_data.db         # SQLite database (created automatically)
 ```
 
 ## Installation
@@ -43,7 +44,9 @@ cd Option_Seller
 pip install -r requirements.txt
 ```
 
-### 3. Configure API Credentials
+### 3. Configure API Credentials (Optional)
+
+The system can run in mock data mode without API credentials. To collect real market data:
 
 Copy the example environment file and add your Zerodha credentials:
 
@@ -51,32 +54,26 @@ Copy the example environment file and add your Zerodha credentials:
 cp .env.example .env
 ```
 
-Edit `.env` and add your **API Key and Secret** (these are the only required credentials):
+Edit `.env` and add your **API Key and Secret**:
 
 ```env
 ZERODHA_API_KEY=your_api_key_here
 ZERODHA_API_SECRET=your_api_secret_here
 ```
 
-**Note**: You do NOT need to store your user ID, password, or PIN in the `.env` file. The system uses a manual OAuth login flow (see below).
+### 4. Update Configuration (Optional)
 
-### 4. Update Configuration
-
-Edit `banknifty_trader/config.py` to customize trading parameters:
+Edit `banknifty_trader/config.py` to customize data collection parameters:
 
 ```python
-TRADING_PARAMS = {
-    'capital': 300000,              # Your trading capital
-    'max_risk_per_trade': 0.02,     # 2% risk per trade
-    'position_size': 1,             # Number of lots
-    'vix_range': (12, 25),          # Acceptable VIX range
-    'delta_threshold': 15,          # Max delta before hedging
-    'profit_target': 0.5,           # 50% of premium
-    'stop_loss': 2.0,               # 200% of premium
+DATA_COLLECTION = {
+    'market_data_interval': 5,          # Seconds between market data snapshots
+    'option_chain_interval': 30,        # Seconds between option chain updates
+    'volatility_calc_interval': 60,     # Seconds between volatility calculations
 }
 ```
 
-## Getting Started with Zerodha
+## Getting Started with Zerodha (Optional)
 
 ### 1. Create API App
 
@@ -84,37 +81,20 @@ TRADING_PARAMS = {
 2. Login with your Zerodha credentials
 3. Click "Create New App"
 4. Fill in the app details:
-   - App Name: BankNifty Trader (or any name)
+   - App Name: BankNifty Data Collector
    - Redirect URL: `http://127.0.0.1`
-   - Description: Options trading system
+   - Description: Options data collection system
 5. Note down your **API Key** and **API Secret**
 
 ### 2. Manual Login Flow (First Time)
 
-When you run the system for the first time, you'll need to manually login:
+When you run the system for the first time with API credentials, you'll need to manually login:
 
-1. **System generates login URL**: The system will display a URL like:
-   ```
-   https://kite.zerodha.com/connect/login?api_key=xxxxx
-   ```
-
-2. **Login manually**:
-   - Copy and paste the URL into your browser
-   - Login with your Zerodha User ID and Password
-   - Enter your 2FA/TOTP code if enabled
-
-3. **Get request token**: After successful login, you'll be redirected to:
-   ```
-   http://127.0.0.1/?request_token=XXXXXXXXX&action=login&status=success
-   ```
-   Copy the `request_token` value from the URL
-
-4. **Paste request token**: Paste the request token into the terminal
-
-5. **Save access token**: The system will generate an access token and display it. Save this in your `.env` file:
-   ```env
-   ZERODHA_ACCESS_TOKEN=your_access_token_here
-   ```
+1. **System generates login URL**: Copy the URL displayed in the terminal
+2. **Login manually**: Open the URL in your browser and login
+3. **Get request token**: Copy the request_token from the redirected URL
+4. **Paste request token**: Paste it into the terminal
+5. **Save access token**: The system will display an access token - save it in your `.env` file
 
 ### 3. Reusing Access Tokens
 
@@ -127,27 +107,17 @@ Access tokens are valid until midnight. To avoid manual login every time:
 
 ## Usage
 
-### Paper Trading (Recommended for Testing)
-
-Run the system in paper trading mode (no real orders):
+### Start Data Collection
 
 ```bash
-cd banknifty_trader
-python executor.py
+python run.py
 ```
 
 OR
 
 ```bash
-python -m banknifty_trader.executor
-```
-
-### Live Trading
-
-**⚠️ WARNING: This will place real orders!**
-
-```bash
-python executor.py --live
+cd banknifty_trader
+python data_collector.py
 ```
 
 ### Console Output
@@ -155,158 +125,140 @@ python executor.py --live
 The system provides a real-time console display that updates every 5 seconds:
 
 ```
-============================================================
-    BANKNIFTY OPTIONS TRADING SYSTEM - PAPER TRADING
-============================================================
+======================================================================
+    BANKNIFTY OPTIONS DATA COLLECTION SYSTEM
+======================================================================
 Session Start: 2024-01-15 09:15:30
 Current Time: 10:30:45
+Snapshots Collected: 125
 
-📊 MARKET STATUS:
-BankNifty: 48,235.50
-VIX: 15.60 (Normal) 🟢
-Event Risk: GREEN 🟢
-Message: No major events - NORMAL TRADING
-Trading: ✅ ALLOWED
+📊 MARKET DATA:
+BankNifty Spot: 48,235.50
+India VIX: 15.60 (Normal) 🟢
+  Change: -0.25 (-1.6%)
+Historical Volatility: 18.50% (Normal)
+  Daily Vol: 1.20% | Window: 20 days
+Market Status: ✅ OPEN - COLLECTING DATA
 
-📈 CURRENT POSITION:
-Type: SHORT_STRANGLE
-Strikes: CE 48500, PE 47900
-Entry: CE ₹150.25, PE ₹145.50
-Entry Time: 09:30:00
-Duration: 60 minutes
+📈 OPTION CHAIN DATA:
+ATM Strike: 48,200
+CE Premium: ₹150.25 | PE Premium: ₹145.50
+CE IV: 18.50% | PE IV: 18.75%
+Put-Call Ratio (OI): 1.05
+Total CE OI: 1,250,000 | Total PE OI: 1,312,500
+Last Snapshot: 15s ago
 
-P&L: 📈 ₹1,245.50 (+42.1%)
-Peak Profit: ₹1,450.00
-Max Loss: ₹-350.00
-Target: ₹2,220.00
-Stop: ₹-5,910.00
-Delta: +2.50
+📊 GREEKS ANALYSIS:
+ATM CE Greeks:
+  Delta: 0.520 | Gamma: 0.0025
+  Theta: -45.50 | Vega: 28.50
+ATM PE Greeks:
+  Delta: -0.480 | Gamma: 0.0025
+  Theta: -44.20 | Vega: 27.80
 
-🎯 TRADING SIGNAL:
-⏸️  ACTION: HOLD POSITION
-   Current P&L: ₹1,245.50
-   Delta: +2.50
-   Reason: Position healthy - P&L: +42.1%
-   Confidence: 70.0%
+📁 COLLECTION STATISTICS:
+Session Duration: 75 minutes
+Total Snapshots: 125
+Collection Rate: 1.7 snapshots/min
+DB Records:
+  Market Data: 900
+  Option Chain: 150
+  Volatility: 75
 
-⚠️  RISK METRICS:
-Daily P&L: ₹1,245.50 (+0.42%)
-Daily Limit: ₹6,000
-Remaining: ₹4,754.50
-VaR (95%): ₹3,200
-Positions: 1/1
-Trades Today: 1
-
-📅 UPCOMING EVENTS (Next 24hrs):
-   ✅ No high impact events
-
-============================================================
+======================================================================
 Refreshing in 5 seconds... Press Ctrl+C to stop
-============================================================
+======================================================================
 ```
 
 ## Configuration Guide
 
-### Trading Parameters
+### Data Collection Parameters
 
-| Parameter | Description | Default | Recommendation |
-|-----------|-------------|---------|----------------|
-| `capital` | Total trading capital | 300,000 | Min 100,000 |
-| `max_risk_per_trade` | Risk per trade (%) | 0.02 | 1-3% |
-| `position_size` | Number of lots | 1 | Start with 1 |
-| `vix_range` | Acceptable VIX range | (12, 25) | Avoid extremes |
-| `delta_threshold` | Max delta before hedge | 15 | 10-20 |
-| `profit_target` | Profit target (% of premium) | 0.5 | 40-60% |
-| `stop_loss` | Stop loss (% of premium) | 2.0 | 150-250% |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `market_data_interval` | Seconds between market snapshots | 5 |
+| `option_chain_interval` | Seconds between option chain updates | 30 |
+| `volatility_calc_interval` | Seconds between volatility calculations | 60 |
+| `store_option_chain` | Store option chain snapshots | True |
+| `store_greeks` | Store Greeks data | True |
+| `store_volatility` | Store volatility metrics | True |
 
-### Strategy Types
+### Data Collection Hours
 
-1. **SHORT_STRANGLE** (Default)
-   - Sell OTM call and put options
-   - Profit from time decay and low volatility
-   - Best when IV is high (>60th percentile)
-
-2. **LONG_STRANGLE**
-   - Buy OTM call and put options
-   - Profit from large moves
-   - Best when expecting volatility expansion
-
-### Strike Selection Methods
-
-1. **DELTA**: Select strikes based on delta targets (e.g., 0.30 delta)
-2. **ATM_OFFSET**: Select strikes at fixed distance from ATM
-3. **PREMIUM**: Select based on premium range
-
-## Risk Management
-
-The system includes multiple layers of risk protection:
-
-### Position Limits
-- Maximum positions open simultaneously
-- Maximum daily loss limit
-- Consecutive loss protection with cooldown
-
-### Greek Limits
-- Delta: ±15 (adjustable)
-- Gamma: Max 1000
-- Vega: Max 5000
-- Theta: Min -2000/day
-
-### Emergency Exits
-- Daily loss > ₹6,000
-- VIX spike > 20%
-- Underlying move > 2% in 5 minutes
+```python
+COLLECTION_HOURS = {
+    'start_time': '09:15',              # Market open
+    'end_time': '15:30',                # Market close
+}
+```
 
 ## Database
 
-All trades are logged to SQLite database (`trades.db`) with the following tables:
+All market data is logged to SQLite database (`market_data.db`) with the following tables:
 
-- **trades**: Complete trade records
-- **signals**: All trading signals generated
-- **greeks_history**: Greek values over time
-- **market_data**: Market condition snapshots
-- **daily_performance**: Daily statistics
+- **market_data**: BankNifty spot, VIX, volatility snapshots
+- **option_chain**: Complete option chain snapshots
+- **volatility_data**: IV, HV, IV percentile metrics
+- **pcr_data**: Put-Call Ratio data
+- **greeks_data**: Aggregated Greeks metrics
 
-### Query Trade History
+### Query Data with Python
 
 ```python
-from banknifty_trader.database import TradingDatabase
+from banknifty_trader.database import MarketDataDatabase
 
-db = TradingDatabase()
+db = MarketDataDatabase()
 
-# Get last 30 days of trades
-trades = db.get_trade_history(days=30)
+# Get last 24 hours of market data
+market_data = db.get_market_data(days=1)
 
-# Get today's statistics
-stats = db.get_daily_stats()
+# Get last hour of option chain snapshots
+option_chain = db.get_option_chain_snapshots(hours=1)
 
-# Get overall performance
-summary = db.get_performance_summary()
+# Get collection statistics
+stats = db.get_collection_stats()
+print(stats)
 ```
 
-## Performance Analytics
+### Export to CSV for Analysis
 
-The system calculates and displays:
+```python
+import pandas as pd
+from banknifty_trader.database import MarketDataDatabase
 
-- **Win Rate**: Percentage of profitable trades
-- **Profit Factor**: Gross profits / gross losses
-- **Sharpe Ratio**: Risk-adjusted returns
-- **Max Drawdown**: Largest peak-to-trough decline
-- **Average Win/Loss**: Average profit vs average loss
+db = MarketDataDatabase()
 
-## Economic Event Monitoring
+# Export market data
+market_data = db.get_market_data(days=7)
+market_data.to_csv('market_data_7days.csv', index=False)
 
-The system monitors and reacts to:
+# Export option chain
+option_chain = db.get_option_chain_snapshots(hours=6)
+option_chain.to_csv('option_chain_6hours.csv', index=False)
+```
 
-- **High Impact Events** (Score 4-5): Skip trading
-  - RBI Monetary Policy
-  - US FOMC Meeting
-  - Major CPI/GDP releases
+## Analysis Use Cases
 
-- **Medium Impact Events** (Score 3): Reduce position size
-  - Trade balance
-  - Industrial production
-  - Retail sales
+With the collected data, you can:
+
+1. **Volatility Analysis**
+   - Compare IV vs HV
+   - Track IV percentile over time
+   - Identify volatility expansion/contraction
+
+2. **Option Chain Analysis**
+   - Identify support/resistance from OI
+   - Track max pain levels
+   - Analyze PCR for sentiment
+
+3. **Greeks Analysis**
+   - Track delta distribution
+   - Monitor gamma exposure zones
+   - Analyze theta decay patterns
+
+4. **Strategy Backtesting** (Future)
+   - Use collected data for backtesting
+   - Build execution module later
 
 ## Troubleshooting
 
@@ -318,7 +270,7 @@ pip install kiteconnect
 
 ### Issue: "API credentials not configured"
 
-Make sure you have set `ZERODHA_API_KEY` and `ZERODHA_API_SECRET` in your `.env` file.
+The system will run in mock data mode. To collect real data, configure API credentials in `.env` file.
 
 ### Issue: "Access token expired" or "TokenException"
 
@@ -329,129 +281,57 @@ Access tokens expire daily at midnight IST. To fix:
 3. Follow the manual login flow to get a new token
 4. Save the new token in your `.env` file
 
-### Issue: "Invalid request token"
-
-Request tokens are valid for only a few minutes. If you see this error:
-
-1. Generate a fresh login URL by restarting the system
-2. Complete the login process quickly
-3. Paste the request token immediately
-
 ### Issue: "Database locked"
 
 Close any other programs accessing the database.
 
-### Issue: "Module not found"
-
-Make sure you're in the correct directory:
-
-```bash
-cd banknifty_trader
-python executor.py
-```
-
 ## Important Notes
 
-### Capital Requirements
-
-- Minimum recommended capital: ₹100,000
-- BankNifty lot size: 15
-- Keep sufficient margin for hedging
-
-### Trading Hours
+### Data Collection Hours
 
 - Market open: 09:15 AM IST
-- System starts trading: 09:20 AM IST (after market settles)
-- Last entry: 03:00 PM IST
-- Exit all positions: 03:15 PM IST
-
-### Commissions and Costs
-
-- Update commission costs in config
-- Default: ₹40 per lot (round trip)
-- Consider STT, exchange fees, GST
+- System starts collecting: 09:15 AM IST
+- Market close: 03:30 PM IST
+- System stops: 03:30 PM IST
 
 ### Market Holidays
 
 The system does not automatically check for market holidays. Do not run on:
 - NSE holidays
 - Muhurat trading days
-- Settlement days
 
-## Advanced Features
+### Disk Space
 
-### Custom Event Calendar
+Option chain snapshots can consume significant disk space over time. Monitor your disk usage and clean up old data periodically.
 
-Add known events to `market_monitor.py`:
+## Roadmap
 
-```python
-known_events = [
-    ('2024-02-08 14:00', 'RBI Monetary Policy', 5),
-    ('2024-02-15 20:00', 'US FOMC Meeting', 5),
-]
-```
-
-### Backtesting
-
-```python
-from banknifty_trader.strategy import BankNiftyOptionsTrader
-from config import BACKTEST_CONFIG
-
-# Enable backtesting in config
-BACKTEST_CONFIG['enabled'] = True
-BACKTEST_CONFIG['start_date'] = '2023-01-01'
-BACKTEST_CONFIG['end_date'] = '2023-12-31'
-
-# Run backtest
-# (Implementation pending)
-```
-
-### Telegram Notifications
-
-Configure in `config.py`:
-
-```python
-NOTIFICATION_CONFIG = {
-    'telegram_enabled': True,
-    'telegram_bot_token': 'your_bot_token',
-    'telegram_chat_id': 'your_chat_id',
-}
-```
-
-## Safety Guidelines
-
-1. **Start with Paper Trading**: Test thoroughly before going live
-2. **Small Position Sizes**: Start with 1 lot
-3. **Set Daily Limits**: Never risk more than you can afford
-4. **Monitor Regularly**: Don't leave the system unattended
-5. **Understand the Code**: Review all modules before using
-6. **Keep Backups**: Back up your database regularly
-7. **Update Regularly**: Keep dependencies and API libraries updated
+- [x] Real-time data collection
+- [x] Option chain snapshots
+- [x] Volatility tracking
+- [x] Greeks calculation
+- [x] SQLite storage
+- [ ] Data export utilities
+- [ ] Analysis notebooks
+- [ ] Backtesting module
+- [ ] Strategy development
+- [ ] Execution module
+- [ ] Web dashboard
 
 ## Disclaimer
 
 **⚠️ IMPORTANT DISCLAIMER:**
 
-This software is provided for educational purposes only. Trading in options involves substantial risk of loss and is not suitable for all investors. Past performance is not indicative of future results.
+This software is provided for educational and research purposes only. This is a data collection tool and does NOT execute any trades.
 
 - Use at your own risk
-- The authors are not responsible for any financial losses
-- Always test in paper trading mode first
-- Consult with a financial advisor before trading
-- Options trading can result in total loss of capital
+- Market data may have delays or inaccuracies
+- Always verify data before using in analysis
+- This is not financial advice
 
 ## License
 
 This project is for educational and research purposes. See LICENSE file for details.
-
-## Support
-
-For issues, questions, or contributions:
-
-1. Check the troubleshooting section
-2. Review the code documentation
-3. Open an issue on GitHub
-4. Consult Zerodha API documentation
 
 ## Contributing
 
@@ -464,35 +344,22 @@ Contributions are welcome! Please:
 
 ## Changelog
 
+### Version 2.0.0 (2025-01-01)
+
+- **Complete refactor to data collection only**
+- Removed all trading/execution functionality
+- Added comprehensive market data logging
+- Added volatility tracking
+- Added PCR metrics
+- Simplified codebase for data collection
+
 ### Version 1.0.0 (2024-01-15)
 
-- Initial release
-- Basic short strangle strategy
-- Risk management system
-- Economic event monitoring
-- Real-time console display
-- SQLite trade logging
-- Paper trading mode
-
-## Roadmap
-
-- [ ] Backtesting module
-- [ ] Telegram bot integration
-- [ ] Web dashboard
-- [ ] Iron Condor strategy
-- [ ] Machine learning signal enhancement
-- [ ] Multi-timeframe analysis
-- [ ] Options chain heatmap
-- [ ] Alert system for large moves
-
-## Acknowledgments
-
-- Zerodha for KiteConnect API
-- The Python trading community
-- Options pricing models and research
+- Initial release with trading system
+- (Now deprecated in favor of data collection)
 
 ---
 
-**Happy Trading! 📈**
+**Happy Data Collecting! 📊**
 
-Remember: The best trade is often the one you don't take. Trade responsibly!
+Collect data first, analyze later, trade smart!

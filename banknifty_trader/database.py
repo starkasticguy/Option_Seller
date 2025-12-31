@@ -1,20 +1,21 @@
 """
 Database Module
-Handles SQLite database operations for trade logging and history
+Handles SQLite database operations for market data logging
 """
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import json
 import pytz
+import pandas as pd
 from colorama import Fore
 
 from config import DATABASE_CONFIG
 
 
-class TradingDatabase:
-    """SQLite database for trade and signal logging"""
+class MarketDataDatabase:
+    """SQLite database for market data logging"""
 
     def __init__(self, db_path: str = None):
         """
@@ -46,6 +47,7 @@ class TradingDatabase:
         try:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.cursor = self.conn.cursor()
+            print(f"{Fore.GREEN}Database connected: {self.db_path}")
         except Exception as e:
             print(f"{Fore.RED}Error connecting to database: {str(e)}")
 
@@ -56,73 +58,6 @@ class TradingDatabase:
             return
 
         try:
-            # Trades table
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS trades (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    entry_time TIMESTAMP,
-                    exit_time TIMESTAMP,
-                    trade_type TEXT,
-                    ce_strike INTEGER,
-                    pe_strike INTEGER,
-                    ce_entry_premium REAL,
-                    pe_entry_premium REAL,
-                    ce_exit_premium REAL,
-                    pe_exit_premium REAL,
-                    lots INTEGER,
-                    lot_size INTEGER,
-                    entry_spot REAL,
-                    exit_spot REAL,
-                    entry_vix REAL,
-                    exit_vix REAL,
-                    pnl REAL,
-                    pnl_percent REAL,
-                    exit_reason TEXT,
-                    entry_delta REAL,
-                    exit_delta REAL,
-                    max_profit REAL,
-                    max_loss REAL,
-                    duration_minutes INTEGER,
-                    commission REAL,
-                    net_pnl REAL,
-                    notes TEXT
-                )
-            ''')
-
-            # Signals table
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS signals (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP,
-                    signal_type TEXT,
-                    action TEXT,
-                    ce_strike INTEGER,
-                    pe_strike INTEGER,
-                    spot_price REAL,
-                    vix REAL,
-                    iv_percentile REAL,
-                    confidence REAL,
-                    reason TEXT,
-                    executed BOOLEAN,
-                    signal_data TEXT
-                )
-            ''')
-
-            # Greeks history table
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS greeks_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP,
-                    trade_id INTEGER,
-                    delta REAL,
-                    gamma REAL,
-                    theta REAL,
-                    vega REAL,
-                    spot_price REAL,
-                    FOREIGN KEY (trade_id) REFERENCES trades(id)
-                )
-            ''')
-
             # Market data table
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS market_data (
@@ -131,166 +66,88 @@ class TradingDatabase:
                     banknifty_spot REAL,
                     india_vix REAL,
                     vix_change_pct REAL,
-                    event_status TEXT,
-                    event_risk_score REAL
+                    hv REAL,
+                    hv_daily REAL
                 )
             ''')
 
-            # Performance metrics table
+            # Option chain snapshots table
             self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS daily_performance (
+                CREATE TABLE IF NOT EXISTS option_chain (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date DATE UNIQUE,
-                    trades_count INTEGER,
-                    winners INTEGER,
-                    losers INTEGER,
-                    total_pnl REAL,
-                    total_commission REAL,
-                    net_pnl REAL,
-                    win_rate REAL,
-                    profit_factor REAL,
-                    max_drawdown REAL,
-                    sharpe_ratio REAL
+                    timestamp TIMESTAMP,
+                    strike INTEGER,
+                    ce_ltp REAL,
+                    ce_bid REAL,
+                    ce_ask REAL,
+                    ce_iv REAL,
+                    ce_delta REAL,
+                    ce_gamma REAL,
+                    ce_theta REAL,
+                    ce_vega REAL,
+                    ce_oi INTEGER,
+                    ce_volume INTEGER,
+                    pe_ltp REAL,
+                    pe_bid REAL,
+                    pe_ask REAL,
+                    pe_iv REAL,
+                    pe_delta REAL,
+                    pe_gamma REAL,
+                    pe_theta REAL,
+                    pe_vega REAL,
+                    pe_oi INTEGER,
+                    pe_volume INTEGER
+                )
+            ''')
+
+            # Volatility metrics table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS volatility_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP,
+                    iv REAL,
+                    hv REAL,
+                    iv_percentile REAL,
+                    hv_window INTEGER
+                )
+            ''')
+
+            # PCR metrics table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS pcr_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP,
+                    pcr_oi REAL,
+                    pcr_volume REAL,
+                    total_ce_oi INTEGER,
+                    total_pe_oi INTEGER,
+                    total_ce_volume INTEGER,
+                    total_pe_volume INTEGER
+                )
+            ''')
+
+            # Greeks aggregated data
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS greeks_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP,
+                    atm_strike INTEGER,
+                    ce_delta REAL,
+                    ce_gamma REAL,
+                    ce_theta REAL,
+                    ce_vega REAL,
+                    pe_delta REAL,
+                    pe_gamma REAL,
+                    pe_theta REAL,
+                    pe_vega REAL
                 )
             ''')
 
             self.conn.commit()
+            print(f"{Fore.GREEN}Database tables created successfully")
 
         except Exception as e:
             print(f"{Fore.RED}Error creating tables: {str(e)}")
-
-    def log_trade(self, trade_data: Dict) -> int:
-        """
-        Log a trade to the database
-
-        Args:
-            trade_data: Trade details dictionary
-
-        Returns:
-            Trade ID
-        """
-        try:
-            self.cursor.execute('''
-                INSERT INTO trades (
-                    entry_time, exit_time, trade_type,
-                    ce_strike, pe_strike,
-                    ce_entry_premium, pe_entry_premium,
-                    ce_exit_premium, pe_exit_premium,
-                    lots, lot_size,
-                    entry_spot, exit_spot,
-                    entry_vix, exit_vix,
-                    pnl, pnl_percent,
-                    exit_reason,
-                    entry_delta, exit_delta,
-                    max_profit, max_loss,
-                    duration_minutes,
-                    commission, net_pnl,
-                    notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                trade_data.get('entry_time'),
-                trade_data.get('exit_time'),
-                trade_data.get('trade_type'),
-                trade_data.get('ce_strike'),
-                trade_data.get('pe_strike'),
-                trade_data.get('ce_entry_premium'),
-                trade_data.get('pe_entry_premium'),
-                trade_data.get('ce_exit_premium'),
-                trade_data.get('pe_exit_premium'),
-                trade_data.get('lots'),
-                trade_data.get('lot_size'),
-                trade_data.get('entry_spot'),
-                trade_data.get('exit_spot'),
-                trade_data.get('entry_vix'),
-                trade_data.get('exit_vix'),
-                trade_data.get('pnl'),
-                trade_data.get('pnl_percent'),
-                trade_data.get('exit_reason'),
-                trade_data.get('entry_delta'),
-                trade_data.get('exit_delta'),
-                trade_data.get('max_profit', 0),
-                trade_data.get('max_loss', 0),
-                trade_data.get('duration_minutes'),
-                trade_data.get('commission', 0),
-                trade_data.get('net_pnl'),
-                trade_data.get('notes', '')
-            ))
-
-            self.conn.commit()
-            return self.cursor.lastrowid
-
-        except Exception as e:
-            print(f"{Fore.RED}Error logging trade: {str(e)}")
-            return -1
-
-    def log_signal(self, signal_data: Dict) -> int:
-        """
-        Log a trading signal
-
-        Args:
-            signal_data: Signal details dictionary
-
-        Returns:
-            Signal ID
-        """
-        try:
-            self.cursor.execute('''
-                INSERT INTO signals (
-                    timestamp, signal_type, action,
-                    ce_strike, pe_strike,
-                    spot_price, vix, iv_percentile,
-                    confidence, reason, executed,
-                    signal_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.now(self.ist),
-                signal_data.get('type', 'UNKNOWN'),
-                signal_data.get('action'),
-                signal_data.get('strikes', {}).get('CE', {}).get('strike'),
-                signal_data.get('strikes', {}).get('PE', {}).get('strike'),
-                signal_data.get('spot_price'),
-                signal_data.get('vix'),
-                signal_data.get('iv_percentile'),
-                signal_data.get('confidence'),
-                signal_data.get('reason'),
-                signal_data.get('executed', False),
-                json.dumps(signal_data)
-            ))
-
-            self.conn.commit()
-            return self.cursor.lastrowid
-
-        except Exception as e:
-            print(f"{Fore.RED}Error logging signal: {str(e)}")
-            return -1
-
-    def log_greeks(self, trade_id: int, greeks: Dict):
-        """
-        Log portfolio greeks
-
-        Args:
-            trade_id: Associated trade ID
-            greeks: Greeks dictionary
-        """
-        try:
-            self.cursor.execute('''
-                INSERT INTO greeks_history (
-                    timestamp, trade_id, delta, gamma, theta, vega, spot_price
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.now(self.ist),
-                trade_id,
-                greeks.get('delta'),
-                greeks.get('gamma'),
-                greeks.get('theta'),
-                greeks.get('vega'),
-                greeks.get('spot_price')
-            ))
-
-            self.conn.commit()
-
-        except Exception as e:
-            print(f"{Fore.RED}Error logging greeks: {str(e)}")
 
     def log_market_data(self, market_data: Dict):
         """
@@ -303,15 +160,15 @@ class TradingDatabase:
             self.cursor.execute('''
                 INSERT INTO market_data (
                     timestamp, banknifty_spot, india_vix,
-                    vix_change_pct, event_status, event_risk_score
+                    vix_change_pct, hv, hv_daily
                 ) VALUES (?, ?, ?, ?, ?, ?)
             ''', (
-                datetime.now(self.ist),
+                market_data.get('timestamp', datetime.now(self.ist)),
                 market_data.get('spot'),
                 market_data.get('vix'),
                 market_data.get('vix_change_pct'),
-                market_data.get('event_status'),
-                market_data.get('event_risk_score')
+                market_data.get('hv'),
+                market_data.get('hv_daily')
             ))
 
             self.conn.commit()
@@ -319,148 +176,183 @@ class TradingDatabase:
         except Exception as e:
             print(f"{Fore.RED}Error logging market data: {str(e)}")
 
-    def get_trade_history(self, days: int = 30) -> List[Dict]:
+    def log_option_chain(self, chain_df: pd.DataFrame):
         """
-        Get trade history
+        Log option chain snapshot
+
+        Args:
+            chain_df: Option chain DataFrame
+        """
+        try:
+            timestamp = datetime.now(self.ist)
+
+            for _, row in chain_df.iterrows():
+                self.cursor.execute('''
+                    INSERT INTO option_chain (
+                        timestamp, strike,
+                        ce_ltp, ce_bid, ce_ask, ce_iv, ce_delta, ce_gamma, ce_theta, ce_vega, ce_oi, ce_volume,
+                        pe_ltp, pe_bid, pe_ask, pe_iv, pe_delta, pe_gamma, pe_theta, pe_vega, pe_oi, pe_volume
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    timestamp,
+                    row['strike'],
+                    row['ce_ltp'], row['ce_bid'], row['ce_ask'], row['ce_iv'],
+                    row['ce_delta'], row['ce_gamma'], row['ce_theta'], row['ce_vega'],
+                    row['ce_oi'], row['ce_volume'],
+                    row['pe_ltp'], row['pe_bid'], row['pe_ask'], row['pe_iv'],
+                    row['pe_delta'], row['pe_gamma'], row['pe_theta'], row['pe_vega'],
+                    row['pe_oi'], row['pe_volume']
+                ))
+
+            self.conn.commit()
+
+        except Exception as e:
+            print(f"{Fore.RED}Error logging option chain: {str(e)}")
+
+    def log_volatility(self, volatility_data: Dict):
+        """
+        Log volatility metrics
+
+        Args:
+            volatility_data: Volatility data dictionary
+        """
+        try:
+            self.cursor.execute('''
+                INSERT INTO volatility_data (
+                    timestamp, iv, hv, iv_percentile, hv_window
+                ) VALUES (?, ?, ?, ?, ?)
+            ''', (
+                volatility_data.get('timestamp', datetime.now(self.ist)),
+                volatility_data.get('iv'),
+                volatility_data.get('hv'),
+                volatility_data.get('iv_percentile'),
+                volatility_data.get('hv_window')
+            ))
+
+            self.conn.commit()
+
+        except Exception as e:
+            print(f"{Fore.RED}Error logging volatility data: {str(e)}")
+
+    def log_pcr(self, pcr_data: Dict):
+        """
+        Log PCR metrics
+
+        Args:
+            pcr_data: PCR data dictionary
+        """
+        try:
+            self.cursor.execute('''
+                INSERT INTO pcr_data (
+                    timestamp, pcr_oi, pcr_volume,
+                    total_ce_oi, total_pe_oi, total_ce_volume, total_pe_volume
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                pcr_data.get('timestamp', datetime.now(self.ist)),
+                pcr_data.get('pcr_oi'),
+                pcr_data.get('pcr_volume'),
+                pcr_data.get('ce_oi'),
+                pcr_data.get('pe_oi'),
+                pcr_data.get('ce_volume'),
+                pcr_data.get('pe_volume')
+            ))
+
+            self.conn.commit()
+
+        except Exception as e:
+            print(f"{Fore.RED}Error logging PCR data: {str(e)}")
+
+    def get_market_data(self, days: int = 1) -> pd.DataFrame:
+        """
+        Get market data for specified days
 
         Args:
             days: Number of days to look back
 
         Returns:
-            List of trade dictionaries
+            DataFrame with market data
         """
         try:
-            cutoff_date = datetime.now(self.ist) - pd.Timedelta(days=days)
+            cutoff_date = datetime.now(self.ist) - timedelta(days=days)
 
-            self.cursor.execute('''
-                SELECT * FROM trades
-                WHERE entry_time >= ?
-                ORDER BY entry_time DESC
-            ''', (cutoff_date,))
+            query = '''
+                SELECT * FROM market_data
+                WHERE timestamp >= ?
+                ORDER BY timestamp DESC
+            '''
 
-            columns = [desc[0] for desc in self.cursor.description]
-            rows = self.cursor.fetchall()
-
-            trades = []
-            for row in rows:
-                trade = dict(zip(columns, row))
-                trades.append(trade)
-
-            return trades
+            df = pd.read_sql_query(query, self.conn, params=(cutoff_date,))
+            return df
 
         except Exception as e:
-            print(f"{Fore.RED}Error fetching trade history: {str(e)}")
-            return []
+            print(f"{Fore.RED}Error fetching market data: {str(e)}")
+            return pd.DataFrame()
 
-    def get_daily_stats(self, date: str = None) -> Dict:
+    def get_option_chain_snapshots(self, hours: int = 1) -> pd.DataFrame:
         """
-        Get statistics for a specific day
+        Get option chain snapshots for specified hours
 
         Args:
-            date: Date string (YYYY-MM-DD), defaults to today
+            hours: Number of hours to look back
+
+        Returns:
+            DataFrame with option chain data
+        """
+        try:
+            cutoff_time = datetime.now(self.ist) - timedelta(hours=hours)
+
+            query = '''
+                SELECT * FROM option_chain
+                WHERE timestamp >= ?
+                ORDER BY timestamp DESC, strike ASC
+            '''
+
+            df = pd.read_sql_query(query, self.conn, params=(cutoff_time,))
+            return df
+
+        except Exception as e:
+            print(f"{Fore.RED}Error fetching option chain snapshots: {str(e)}")
+            return pd.DataFrame()
+
+    def get_collection_stats(self) -> Dict:
+        """
+        Get data collection statistics
 
         Returns:
             Statistics dictionary
         """
         try:
-            if date is None:
-                date = datetime.now(self.ist).strftime('%Y-%m-%d')
+            stats = {}
 
-            self.cursor.execute('''
-                SELECT
-                    COUNT(*) as total_trades,
-                    SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as winners,
-                    SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) as losers,
-                    SUM(pnl) as total_pnl,
-                    AVG(pnl) as avg_pnl,
-                    MAX(pnl) as max_profit,
-                    MIN(pnl) as max_loss
-                FROM trades
-                WHERE DATE(entry_time) = ?
-            ''', (date,))
+            # Count market data records
+            self.cursor.execute('SELECT COUNT(*) FROM market_data')
+            stats['market_data_count'] = self.cursor.fetchone()[0]
 
-            row = self.cursor.fetchone()
+            # Count option chain records
+            self.cursor.execute('SELECT COUNT(DISTINCT timestamp) FROM option_chain')
+            stats['option_chain_count'] = self.cursor.fetchone()[0]
 
-            if row:
-                return {
-                    'date': date,
-                    'total_trades': row[0] or 0,
-                    'winners': row[1] or 0,
-                    'losers': row[2] or 0,
-                    'total_pnl': row[3] or 0,
-                    'avg_pnl': row[4] or 0,
-                    'max_profit': row[5] or 0,
-                    'max_loss': row[6] or 0,
-                    'win_rate': (row[1] / row[0] * 100) if row[0] > 0 else 0
-                }
+            # Count volatility records
+            self.cursor.execute('SELECT COUNT(*) FROM volatility_data')
+            stats['volatility_count'] = self.cursor.fetchone()[0]
 
-            return {}
+            # Get date range
+            self.cursor.execute('SELECT MIN(timestamp), MAX(timestamp) FROM market_data')
+            min_date, max_date = self.cursor.fetchone()
+            stats['data_start'] = min_date
+            stats['data_end'] = max_date
+
+            return stats
 
         except Exception as e:
-            print(f"{Fore.RED}Error fetching daily stats: {str(e)}")
-            return {}
-
-    def get_performance_summary(self) -> Dict:
-        """
-        Get overall performance summary
-
-        Returns:
-            Performance summary dictionary
-        """
-        try:
-            self.cursor.execute('''
-                SELECT
-                    COUNT(*) as total_trades,
-                    SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as winners,
-                    SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) as losers,
-                    SUM(pnl) as total_pnl,
-                    AVG(pnl) as avg_pnl,
-                    AVG(CASE WHEN pnl > 0 THEN pnl END) as avg_win,
-                    AVG(CASE WHEN pnl < 0 THEN pnl END) as avg_loss,
-                    MAX(pnl) as max_profit,
-                    MIN(pnl) as max_loss,
-                    AVG(duration_minutes) as avg_duration
-                FROM trades
-            ''')
-
-            row = self.cursor.fetchone()
-
-            if row and row[0]:
-                total_trades = row[0]
-                winners = row[1] or 0
-                losers = row[2] or 0
-                total_pnl = row[3] or 0
-                avg_win = row[5] or 0
-                avg_loss = abs(row[6]) if row[6] else 0
-
-                win_rate = (winners / total_trades) if total_trades > 0 else 0
-                profit_factor = (winners * avg_win) / (losers * avg_loss) if (losers * avg_loss) > 0 else 0
-
-                return {
-                    'total_trades': total_trades,
-                    'winners': winners,
-                    'losers': losers,
-                    'win_rate': win_rate,
-                    'total_pnl': total_pnl,
-                    'avg_pnl': row[4],
-                    'avg_win': avg_win,
-                    'avg_loss': avg_loss,
-                    'profit_factor': profit_factor,
-                    'max_profit': row[7],
-                    'max_loss': row[8],
-                    'avg_duration_minutes': row[9]
-                }
-
-            return {}
-
-        except Exception as e:
-            print(f"{Fore.RED}Error fetching performance summary: {str(e)}")
+            print(f"{Fore.RED}Error fetching collection stats: {str(e)}")
             return {}
 
     def close(self):
         """Close database connection"""
         if self.conn:
             self.conn.close()
+            print(f"{Fore.YELLOW}Database connection closed")
 
     def __del__(self):
         """Cleanup on deletion"""
@@ -468,46 +360,24 @@ class TradingDatabase:
 
 
 if __name__ == "__main__":
-    import pandas as pd
-
     print("Testing Database...")
-    db = TradingDatabase()
+    db = MarketDataDatabase()
 
-    # Test trade logging
-    sample_trade = {
-        'entry_time': datetime.now(),
-        'exit_time': datetime.now(),
-        'trade_type': 'SHORT_STRANGLE',
-        'ce_strike': 48500,
-        'pe_strike': 47500,
-        'ce_entry_premium': 150,
-        'pe_entry_premium': 140,
-        'ce_exit_premium': 75,
-        'pe_exit_premium': 70,
-        'lots': 1,
-        'lot_size': 15,
-        'entry_spot': 48000,
-        'exit_spot': 48050,
-        'entry_vix': 16.5,
-        'exit_vix': 16.2,
-        'pnl': 2250,
-        'pnl_percent': 0.48,
-        'exit_reason': 'Profit target',
-        'entry_delta': -2.5,
-        'exit_delta': -1.8,
-        'duration_minutes': 120,
-        'commission': 100,
-        'net_pnl': 2150
+    # Test market data logging
+    sample_market_data = {
+        'timestamp': datetime.now(),
+        'spot': 48250.50,
+        'vix': 15.75,
+        'vix_change_pct': -1.2,
+        'hv': 18.5,
+        'hv_daily': 1.2
     }
 
-    trade_id = db.log_trade(sample_trade)
-    print(f"Logged trade with ID: {trade_id}")
+    db.log_market_data(sample_market_data)
+    print(f"Logged market data sample")
 
     # Test stats
-    stats = db.get_daily_stats()
-    print(f"\nDaily Stats: {stats}")
-
-    summary = db.get_performance_summary()
-    print(f"\nPerformance Summary: {summary}")
+    stats = db.get_collection_stats()
+    print(f"\nCollection Stats: {stats}")
 
     print("\nDatabase module working successfully!")
