@@ -193,7 +193,7 @@ def main():
 
     # Display sample data
     print("\n=== Sample Data (First 5 Calls) ===")
-    calls = option_chain[option_chain['option_type'] == 'CE'].head()
+    calls = option_chain[option_chain['option_type'] == 'CE']
     print(calls[['strike', 'last_price', 'oi', 'volume']])
 
     # Save to CSV for testing
